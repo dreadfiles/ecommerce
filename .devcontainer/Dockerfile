@@ -1,0 +1,5 @@
+FROM golang:1.27
+
+WORKDIR /workspace
+
+ENV CGO_ENABLED=0

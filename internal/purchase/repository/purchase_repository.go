@@ -7,6 +7,18 @@ import (
 )
 
 type PurchaseRepository interface {
-	Create(ctx context.Context, order *domain.Order) error
-	GetByIdempotencyKey(ctx context.Context, key string) (*domain.Order, error)
+	GetQuote(
+		ctx context.Context,
+		items []domain.OrderItem,
+	) (*domain.Order, error)
+
+	Create(
+		ctx context.Context,
+		order *domain.Order,
+	) error
+
+	GetByIdempotencyKey(
+		ctx context.Context,
+		key string,
+	) (*domain.Order, error)
 }

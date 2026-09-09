@@ -24,6 +24,103 @@ func NewPostgresPurchaseRepository(db *sql.DB) *PostgresPurchaseRepository {
 	}
 }
 
+func (r *PostgresPurchaseRepository) GetQuote(
+	ctx context.Context,
+	items []domain.OrderItem,
+) (*domain.Order, error) {
+	if len(items) == 0 {
+		return nil, errors.New("order must contain at least one item")
+	}
+
+	const getProductQuery = `
+		SELECT price, stock
+		FROM products
+		WHERE id = $1
+	`
+
+	orderItems := make([]domain.OrderItem, 0, len(items))
+
+	for _, requestedItem := range items {
+		var price string
+		var stock int
+
+		err := r.db.QueryRowContext(
+			ctx,
+			getProductQuery,
+			requestedItem.ProductID,
+		).Scan(
+			&price,
+			&stock,
+		)
+
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, fmt.Errorf(
+					"product %d: %w",
+					requestedItem.ProductID,
+					ErrProductNotFound,
+				)
+			}
+
+			return nil, fmt.Errorf(
+				"get product %d: %w",
+				requestedItem.ProductID,
+				err,
+			)
+		}
+
+		if stock < requestedItem.Quantity {
+			return nil, fmt.Errorf(
+				"product %d: %w",
+				requestedItem.ProductID,
+				ErrInsufficientStock,
+			)
+		}
+
+		unitPrice, err := parseMoney(price)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"invalid price for product %d: %w",
+				requestedItem.ProductID,
+				err,
+			)
+		}
+
+		quantity := new(big.Rat).SetInt64(
+			int64(requestedItem.Quantity),
+		)
+
+		subtotal := new(big.Rat).Mul(
+			unitPrice,
+			quantity,
+		)
+
+		orderItems = append(
+			orderItems,
+			domain.OrderItem{
+				ProductID: requestedItem.ProductID,
+				Quantity:  requestedItem.Quantity,
+				UnitPrice: price,
+				Subtotal:  formatMoney(subtotal),
+			},
+		)
+	}
+
+	total, err := calculateOrderTotal(orderItems)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"calculate order total: %w",
+			err,
+		)
+	}
+
+	return &domain.Order{
+		Status: domain.OrderStatusPending,
+		Total:  formatMoney(total),
+		Items:  orderItems,
+	}, nil
+}
+
 func (r *PostgresPurchaseRepository) Create(
 	ctx context.Context,
 	order *domain.Order,
@@ -38,7 +135,10 @@ func (r *PostgresPurchaseRepository) Create(
 
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin purchase transaction: %w", err)
+		return fmt.Errorf(
+			"begin purchase transaction: %w",
+			err,
+		)
 	}
 
 	defer func() {
@@ -63,16 +163,17 @@ func (r *PostgresPurchaseRepository) Create(
 	for i := range order.Items {
 		item := &order.Items[i]
 
-		var (
-			price string
-			stock int
-		)
+		var price string
+		var stock int
 
 		err := tx.QueryRowContext(
 			ctx,
 			getProductQuery,
 			item.ProductID,
-		).Scan(&price, &stock)
+		).Scan(
+			&price,
+			&stock,
+		)
 
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
@@ -107,8 +208,14 @@ func (r *PostgresPurchaseRepository) Create(
 			)
 		}
 
-		quantity := new(big.Rat).SetInt64(int64(item.Quantity))
-		subtotal := new(big.Rat).Mul(unitPrice, quantity)
+		quantity := new(big.Rat).SetInt64(
+			int64(item.Quantity),
+		)
+
+		subtotal := new(big.Rat).Mul(
+			unitPrice,
+			quantity,
+		)
 
 		item.UnitPrice = price
 		item.Subtotal = formatMoney(subtotal)
@@ -130,7 +237,10 @@ func (r *PostgresPurchaseRepository) Create(
 
 	total, err := calculateOrderTotal(order.Items)
 	if err != nil {
-		return fmt.Errorf("calculate order total: %w", err)
+		return fmt.Errorf(
+			"calculate order total: %w",
+			err,
+		)
 	}
 
 	order.Total = formatMoney(total)
@@ -161,7 +271,10 @@ func (r *PostgresPurchaseRepository) Create(
 			return ErrIdempotencyKeyExists
 		}
 
-		return fmt.Errorf("create order: %w", err)
+		return fmt.Errorf(
+			"create order: %w",
+			err,
+		)
 	}
 
 	const createOrderItemQuery = `
@@ -242,7 +355,10 @@ func (r *PostgresPurchaseRepository) GetByIdempotencyKey(
 			return nil, ErrOrderNotFound
 		}
 
-		return nil, fmt.Errorf("get order by idempotency key: %w", err)
+		return nil, fmt.Errorf(
+			"get order by idempotency key: %w",
+			err,
+		)
 	}
 
 	const getOrderItemsQuery = `
@@ -264,7 +380,10 @@ func (r *PostgresPurchaseRepository) GetByIdempotencyKey(
 		order.ID,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("get order items: %w", err)
+		return nil, fmt.Errorf(
+			"get order items: %w",
+			err,
+		)
 	}
 	defer rows.Close()
 
@@ -281,20 +400,28 @@ func (r *PostgresPurchaseRepository) GetByIdempotencyKey(
 			&item.UnitPrice,
 			&item.Subtotal,
 		); err != nil {
-			return nil, fmt.Errorf("scan order item: %w", err)
+			return nil, fmt.Errorf(
+				"scan order item: %w",
+				err,
+			)
 		}
 
 		order.Items = append(order.Items, item)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate order items: %w", err)
+		return nil, fmt.Errorf(
+			"iterate order items: %w",
+			err,
+		)
 	}
 
 	return &order, nil
 }
 
-func calculateOrderTotal(items []domain.OrderItem) (*big.Rat, error) {
+func calculateOrderTotal(
+	items []domain.OrderItem,
+) (*big.Rat, error) {
 	total := new(big.Rat)
 
 	for _, item := range items {

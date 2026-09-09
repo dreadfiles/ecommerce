@@ -17,6 +17,15 @@ type PurchaseService interface {
 		idempotencyKey string,
 		paymentService PaymentService,
 	) (*purchasedomain.Order, error)
+
+	GetByID(
+		ctx context.Context,
+		id int64,
+	) (*purchasedomain.Order, error)
+
+	GetAll(
+		ctx context.Context,
+	) ([]*purchasedomain.Order, error)
 }
 
 type PurchaseItem struct {
@@ -200,6 +209,41 @@ func (s *purchaseService) Create(
 	}
 
 	return order, nil
+}
+
+func (s *purchaseService) GetByID(
+	ctx context.Context,
+	id int64,
+) (*purchasedomain.Order, error) {
+	if id <= 0 {
+		return nil, ErrInvalidPurchase
+	}
+
+	order, err := s.purchaseRepository.GetByID(
+		ctx,
+		id,
+	)
+	if err != nil {
+		if errors.Is(
+			err,
+			repository.ErrOrderNotFound,
+		) {
+			return nil, repository.ErrOrderNotFound
+		}
+
+		return nil, fmt.Errorf(
+			"get purchase: %w",
+			err,
+		)
+	}
+
+	return order, nil
+}
+
+func (s *purchaseService) GetAll(
+	ctx context.Context,
+) ([]*purchasedomain.Order, error) {
+	return s.purchaseRepository.GetAll(ctx)
 }
 
 func validatePurchase(

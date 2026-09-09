@@ -361,6 +361,133 @@ func (r *PostgresPurchaseRepository) GetByIdempotencyKey(
 		)
 	}
 
+	if err := r.loadOrderItems(
+		ctx,
+		&order,
+	); err != nil {
+		return nil, err
+	}
+
+	return &order, nil
+}
+
+func (r *PostgresPurchaseRepository) GetByID(
+	ctx context.Context,
+	id int64,
+) (*domain.Order, error) {
+	const getOrderQuery = `
+		SELECT
+			id,
+			status,
+			total,
+			idempotency_key
+		FROM orders
+		WHERE id = $1
+	`
+
+	var order domain.Order
+
+	err := r.db.QueryRowContext(
+		ctx,
+		getOrderQuery,
+		id,
+	).Scan(
+		&order.ID,
+		&order.Status,
+		&order.Total,
+		&order.IdempotencyKey,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrOrderNotFound
+		}
+
+		return nil, fmt.Errorf(
+			"get order by id: %w",
+			err,
+		)
+	}
+
+	if err := r.loadOrderItems(
+		ctx,
+		&order,
+	); err != nil {
+		return nil, err
+	}
+
+	return &order, nil
+}
+
+func (r *PostgresPurchaseRepository) GetAll(
+	ctx context.Context,
+) ([]*domain.Order, error) {
+	const getOrdersQuery = `
+		SELECT
+			id,
+			status,
+			total,
+			idempotency_key
+		FROM orders
+		ORDER BY id DESC
+	`
+
+	rows, err := r.db.QueryContext(
+		ctx,
+		getOrdersQuery,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"get purchases: %w",
+			err,
+		)
+	}
+	defer rows.Close()
+
+	orders := make([]*domain.Order, 0)
+
+	for rows.Next() {
+		var order domain.Order
+
+		if err := rows.Scan(
+			&order.ID,
+			&order.Status,
+			&order.Total,
+			&order.IdempotencyKey,
+		); err != nil {
+			return nil, fmt.Errorf(
+				"scan purchase: %w",
+				err,
+			)
+		}
+
+		if err := r.loadOrderItems(
+			ctx,
+			&order,
+		); err != nil {
+			return nil, err
+		}
+
+		orders = append(
+			orders,
+			&order,
+		)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf(
+			"iterate purchases: %w",
+			err,
+		)
+	}
+
+	return orders, nil
+}
+
+func (r *PostgresPurchaseRepository) loadOrderItems(
+	ctx context.Context,
+	order *domain.Order,
+) error {
 	const getOrderItemsQuery = `
 		SELECT
 			id,
@@ -380,14 +507,17 @@ func (r *PostgresPurchaseRepository) GetByIdempotencyKey(
 		order.ID,
 	)
 	if err != nil {
-		return nil, fmt.Errorf(
+		return fmt.Errorf(
 			"get order items: %w",
 			err,
 		)
 	}
 	defer rows.Close()
 
-	order.Items = make([]domain.OrderItem, 0)
+	order.Items = make(
+		[]domain.OrderItem,
+		0,
+	)
 
 	for rows.Next() {
 		var item domain.OrderItem
@@ -400,23 +530,26 @@ func (r *PostgresPurchaseRepository) GetByIdempotencyKey(
 			&item.UnitPrice,
 			&item.Subtotal,
 		); err != nil {
-			return nil, fmt.Errorf(
+			return fmt.Errorf(
 				"scan order item: %w",
 				err,
 			)
 		}
 
-		order.Items = append(order.Items, item)
+		order.Items = append(
+			order.Items,
+			item,
+		)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf(
+		return fmt.Errorf(
 			"iterate order items: %w",
 			err,
 		)
 	}
 
-	return &order, nil
+	return nil
 }
 
 func calculateOrderTotal(

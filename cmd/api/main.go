@@ -46,6 +46,8 @@ func main() {
 	mux.HandleFunc("POST /api/v1/products/import", productImportHandler.Import)
 
 	mux.HandleFunc("POST /api/v1/purchases", purchaseHandler.Create)
+	mux.HandleFunc("GET /api/v1/purchases", purchaseHandler.GetAll)
+	mux.HandleFunc("GET /api/v1/purchases/{id}", purchaseHandler.GetByID)
 
 	log.Printf(
 		"server listening on %s",

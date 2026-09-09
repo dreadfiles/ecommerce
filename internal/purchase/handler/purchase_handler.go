@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	purchasedomain "ecommerce/internal/purchase/domain"
 	"ecommerce/internal/purchase/dto"
+	"ecommerce/internal/purchase/repository"
 	"ecommerce/internal/purchase/service"
 )
 
@@ -96,6 +98,118 @@ func (h *PurchaseHandler) Create(
 
 	if err := json.NewEncoder(w).Encode(
 		response,
+	); err != nil {
+		return
+	}
+}
+
+func (h *PurchaseHandler) GetAll(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	orders, err := h.service.GetAll(
+		r.Context(),
+	)
+	if err != nil {
+		http.Error(
+			w,
+			"internal server error",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	response := make(
+		[]dto.PurchaseResponse,
+		0,
+		len(orders),
+	)
+
+	for _, order := range orders {
+		response = append(
+			response,
+			toPurchaseResponse(order),
+		)
+	}
+
+	w.Header().Set(
+		"Content-Type",
+		"application/json",
+	)
+
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(
+		response,
+	); err != nil {
+		return
+	}
+}
+
+func (h *PurchaseHandler) GetByID(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	id, err := strconv.ParseInt(
+		r.PathValue("id"),
+		10,
+		64,
+	)
+	if err != nil || id <= 0 {
+		http.Error(
+			w,
+			"invalid purchase id",
+			http.StatusBadRequest,
+		)
+		return
+	}
+
+	order, err := h.service.GetByID(
+		r.Context(),
+		id,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(
+			err,
+			repository.ErrOrderNotFound,
+		):
+			http.Error(
+				w,
+				"purchase not found",
+				http.StatusNotFound,
+			)
+
+		case errors.Is(
+			err,
+			service.ErrInvalidPurchase,
+		):
+			http.Error(
+				w,
+				err.Error(),
+				http.StatusBadRequest,
+			)
+
+		default:
+			http.Error(
+				w,
+				"internal server error",
+				http.StatusInternalServerError,
+			)
+		}
+
+		return
+	}
+
+	w.Header().Set(
+		"Content-Type",
+		"application/json",
+	)
+
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(
+		toPurchaseResponse(order),
 	); err != nil {
 		return
 	}

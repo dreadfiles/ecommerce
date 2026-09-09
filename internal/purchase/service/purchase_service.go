@@ -15,6 +15,7 @@ type PurchaseService interface {
 		ctx context.Context,
 		items []PurchaseItem,
 		idempotencyKey string,
+		paymentService PaymentService,
 	) (*purchasedomain.Order, error)
 }
 
@@ -39,30 +40,123 @@ func (s *purchaseService) Create(
 	ctx context.Context,
 	items []PurchaseItem,
 	idempotencyKey string,
+	paymentService PaymentService,
 ) (*purchasedomain.Order, error) {
-	if err := validatePurchase(items, idempotencyKey); err != nil {
+	if err := validatePurchase(
+		items,
+		idempotencyKey,
+	); err != nil {
 		return nil, err
+	}
+
+	if paymentService == nil {
+		return nil, errors.New(
+			"payment service cannot be nil",
+		)
 	}
 
 	normalizedKey := strings.TrimSpace(idempotencyKey)
 
-	orderItems := make([]purchasedomain.OrderItem, 0, len(items))
+	existingOrder, err := s.purchaseRepository.GetByIdempotencyKey(
+		ctx,
+		normalizedKey,
+	)
+
+	if err == nil {
+		if !samePurchaseItems(
+			items,
+			existingOrder.Items,
+		) {
+			return nil, ErrIdempotencyKeyConflict
+		}
+
+		return existingOrder, nil
+	}
+
+	if !errors.Is(
+		err,
+		repository.ErrOrderNotFound,
+	) {
+		return nil, fmt.Errorf(
+			"check idempotency key: %w",
+			err,
+		)
+	}
+
+	orderItems := make(
+		[]purchasedomain.OrderItem,
+		0,
+		len(items),
+	)
 
 	for _, item := range items {
-		orderItems = append(orderItems, purchasedomain.OrderItem{
-			ProductID: item.ProductID,
-			Quantity:  item.Quantity,
-		})
+		orderItems = append(
+			orderItems,
+			purchasedomain.OrderItem{
+				ProductID: item.ProductID,
+				Quantity:  item.Quantity,
+			},
+		)
+	}
+
+	quote, err := s.purchaseRepository.GetQuote(
+		ctx,
+		orderItems,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(
+			err,
+			repository.ErrProductNotFound,
+		):
+			return nil, ErrProductNotFound
+
+		case errors.Is(
+			err,
+			repository.ErrInsufficientStock,
+		):
+			return nil, ErrInsufficientStock
+
+		default:
+			return nil, fmt.Errorf(
+				"get purchase quote: %w",
+				err,
+			)
+		}
+	}
+
+	if err := paymentService.Process(
+		ctx,
+		quote.Total,
+	); err != nil {
+		if errors.Is(
+			err,
+			ErrPaymentDeclined,
+		) {
+			return nil, ErrPaymentDeclined
+		}
+
+		return nil, fmt.Errorf(
+			"process payment: %w",
+			err,
+		)
 	}
 
 	order := &purchasedomain.Order{
-		Status:         purchasedomain.OrderStatusPending,
+		Status:         purchasedomain.OrderStatusPaid,
+		Total:          quote.Total,
 		IdempotencyKey: normalizedKey,
-		Items:          orderItems,
+		Items:          quote.Items,
 	}
 
-	if err := s.purchaseRepository.Create(ctx, order); err != nil {
-		if errors.Is(err, repository.ErrIdempotencyKeyExists) {
+	if err := s.purchaseRepository.Create(
+		ctx,
+		order,
+	); err != nil {
+		if errors.Is(
+			err,
+			repository.ErrIdempotencyKeyExists,
+		) {
 			existingOrder, getErr := s.purchaseRepository.GetByIdempotencyKey(
 				ctx,
 				normalizedKey,
@@ -74,7 +168,10 @@ func (s *purchaseService) Create(
 				)
 			}
 
-			if !samePurchaseItems(items, existingOrder.Items) {
+			if !samePurchaseItems(
+				items,
+				existingOrder.Items,
+			) {
 				return nil, ErrIdempotencyKeyConflict
 			}
 
@@ -82,14 +179,23 @@ func (s *purchaseService) Create(
 		}
 
 		switch {
-		case errors.Is(err, repository.ErrProductNotFound):
+		case errors.Is(
+			err,
+			repository.ErrProductNotFound,
+		):
 			return nil, ErrProductNotFound
 
-		case errors.Is(err, repository.ErrInsufficientStock):
+		case errors.Is(
+			err,
+			repository.ErrInsufficientStock,
+		):
 			return nil, ErrInsufficientStock
 
 		default:
-			return nil, fmt.Errorf("create purchase: %w", err)
+			return nil, fmt.Errorf(
+				"create purchase: %w",
+				err,
+			)
 		}
 	}
 
@@ -108,7 +214,10 @@ func validatePurchase(
 		return ErrIdempotencyKeyRequired
 	}
 
-	productIDs := make(map[int64]struct{}, len(items))
+	productIDs := make(
+		map[int64]struct{},
+		len(items),
+	)
 
 	for _, item := range items {
 		if item.ProductID <= 0 {
@@ -145,7 +254,10 @@ func samePurchaseItems(
 		return false
 	}
 
-	orderItemsByProduct := make(map[int64]int, len(orderItems))
+	orderItemsByProduct := make(
+		map[int64]int,
+		len(orderItems),
+	)
 
 	for _, item := range orderItems {
 		orderItemsByProduct[item.ProductID] = item.Quantity
@@ -153,6 +265,7 @@ func samePurchaseItems(
 
 	for _, item := range requestItems {
 		quantity, exists := orderItemsByProduct[item.ProductID]
+
 		if !exists || quantity != item.Quantity {
 			return false
 		}

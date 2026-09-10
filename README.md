@@ -18,6 +18,7 @@ A modular e-commerce application built with Go and PostgreSQL, focused on transa
 * PostgreSQL persistence
 * Docker-based execution
 * Versioned REST API
+* OpenAPI API documentation
 
 ## Technology Stack
 
@@ -27,6 +28,7 @@ A modular e-commerce application built with Go and PostgreSQL, focused on transa
 | PostgreSQL 16           | Relational persistence                     |
 | Docker / Docker Compose | Containerization and service orchestration |
 | Dev Containers          | Reproducible development environment       |
+| OpenAPI                 | REST API contract and documentation        |
 
 ## Architecture
 
@@ -129,6 +131,8 @@ Expected structure:
 name,sku,description,category,price,stock,weight_kg
 ```
 
+The CSV is provided to the application as an external input through the product import endpoint. It is not stored as application data in the repository.
+
 ## Idempotency
 
 Purchases require an `Idempotency-Key`.
@@ -202,6 +206,8 @@ Using the Dev Container is optional for running the application.
 ```text
 .
 ├── .devcontainer/
+│   ├── devcontainer.json
+│   └── Dockerfile
 ├── internal/
 │   ├── database/
 │   ├── importer/
@@ -209,11 +215,15 @@ Using the Dev Container is optional for running the application.
 │   ├── purchase/
 │   └── transport/
 ├── migrations/
+├── docs/
+│   ├── openapi.yaml
+│   └── troubleshooting.md
+├── .gitignore
 ├── docker-compose.yml
 ├── go.mod
+├── go.sum
 ├── main.go
-├── README.md
-└── TROUBLESHOOTING.md
+└── README.md
 ```
 
 ## Engineering Decisions
@@ -231,6 +241,7 @@ The main decisions were driven by consistency, maintainability, and extensibilit
 * **Idempotency:** makes purchase retries safe.
 * **Interfaces:** allow payment and persistence implementations to evolve independently.
 * **API versioning:** provides a stable evolution path.
+* **OpenAPI:** provides an explicit and machine-readable API contract.
 
 ## Alternatives Considered
 
@@ -242,11 +253,29 @@ The main decisions were driven by consistency, maintainability, and extensibilit
 
 ## Documentation
 
-Operational issues and their resolutions are documented in [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md).
+### OpenAPI
+
+The complete API contract is available in:
+
+[OpenAPI Specification](docs/openapi.yaml)
+
+To visualize the API documentation:
+
+1. Open `docs/openapi.yaml`.
+2. Copy the complete contents of the file.
+3. Open [Swagger Editor](https://editor.swagger.io/).
+4. Paste the YAML content into the editor.
+5. Swagger Editor will render the API documentation and available endpoints.
+
+### Troubleshooting
+
+Common problems and solutions are documented in:
+
+[Troubleshooting Guide](docs/troubleshooting.md)
 
 ## Challenge Scope
 
-The implementation covers the requested product management, CSV import, product search, purchase processing, fake payment, local database, containerization, and documented engineering decisions.
+The implementation covers the requested product management, CSV import, product search, purchase processing, fake payment, local database, containerization, API documentation, and documented engineering decisions.
 
 ## License
 

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	importservice "ecommerce/internal/importer/service"
+	httptransport "ecommerce/internal/transport/http"
 )
 
 const (
@@ -24,38 +25,49 @@ func NewProductImportHandler(
 	}
 }
 
-func (h *ProductImportHandler) Import(w http.ResponseWriter, r *http.Request) {
+func (h *ProductImportHandler) Import(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 	r.Body = http.MaxBytesReader(
 		w,
 		r.Body,
 		maxImportRequestSize,
 	)
 
-	if err := r.ParseMultipartForm(maxImportRequestSize); err != nil {
-		http.Error(
+	if err := r.ParseMultipartForm(
+		maxImportRequestSize,
+	); err != nil {
+		httptransport.WriteError(
 			w,
-			fmt.Sprintf("invalid multipart form: %v", err),
 			http.StatusBadRequest,
+			fmt.Sprintf(
+				"invalid multipart form: %v",
+				err,
+			),
 		)
 		return
 	}
 
 	file, _, err := r.FormFile(importFileField)
 	if err != nil {
-		http.Error(
+		httptransport.WriteError(
 			w,
-			"csv file is required",
 			http.StatusBadRequest,
+			"csv file is required",
 		)
 		return
 	}
 	defer file.Close()
 
-	if err := h.importService.Import(r.Context(), file); err != nil {
-		http.Error(
+	if err := h.importService.Import(
+		r.Context(),
+		file,
+	); err != nil {
+		httptransport.WriteError(
 			w,
-			err.Error(),
 			http.StatusBadRequest,
+			err.Error(),
 		)
 		return
 	}

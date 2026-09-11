@@ -10,6 +10,7 @@ import (
 	"ecommerce/internal/purchase/dto"
 	"ecommerce/internal/purchase/repository"
 	"ecommerce/internal/purchase/service"
+	httptransport "ecommerce/internal/transport/http"
 )
 
 const (
@@ -38,10 +39,10 @@ func (h *PurchaseHandler) Create(
 	if err := json.NewDecoder(
 		r.Body,
 	).Decode(&request); err != nil {
-		http.Error(
+		httptransport.WriteError(
 			w,
-			"invalid request body",
 			http.StatusBadRequest,
+			"invalid request body",
 		)
 		return
 	}
@@ -87,20 +88,11 @@ func (h *PurchaseHandler) Create(
 		return
 	}
 
-	response := toPurchaseResponse(order)
-
-	w.Header().Set(
-		"Content-Type",
-		"application/json",
+	httptransport.WriteJSON(
+		w,
+		http.StatusCreated,
+		toPurchaseResponse(order),
 	)
-
-	w.WriteHeader(http.StatusCreated)
-
-	if err := json.NewEncoder(w).Encode(
-		response,
-	); err != nil {
-		return
-	}
 }
 
 func (h *PurchaseHandler) GetAll(
@@ -111,10 +103,10 @@ func (h *PurchaseHandler) GetAll(
 		r.Context(),
 	)
 	if err != nil {
-		http.Error(
+		httptransport.WriteError(
 			w,
-			"internal server error",
 			http.StatusInternalServerError,
+			"internal server error",
 		)
 		return
 	}
@@ -132,18 +124,11 @@ func (h *PurchaseHandler) GetAll(
 		)
 	}
 
-	w.Header().Set(
-		"Content-Type",
-		"application/json",
-	)
-
-	w.WriteHeader(http.StatusOK)
-
-	if err := json.NewEncoder(w).Encode(
+	httptransport.WriteJSON(
+		w,
+		http.StatusOK,
 		response,
-	); err != nil {
-		return
-	}
+	)
 }
 
 func (h *PurchaseHandler) GetByID(
@@ -156,10 +141,10 @@ func (h *PurchaseHandler) GetByID(
 		64,
 	)
 	if err != nil || id <= 0 {
-		http.Error(
+		httptransport.WriteError(
 			w,
-			"invalid purchase id",
 			http.StatusBadRequest,
+			"invalid purchase id",
 		)
 		return
 	}
@@ -174,45 +159,38 @@ func (h *PurchaseHandler) GetByID(
 			err,
 			repository.ErrOrderNotFound,
 		):
-			http.Error(
+			httptransport.WriteError(
 				w,
-				"purchase not found",
 				http.StatusNotFound,
+				"purchase not found",
 			)
 
 		case errors.Is(
 			err,
 			service.ErrInvalidPurchase,
 		):
-			http.Error(
+			httptransport.WriteError(
 				w,
-				err.Error(),
 				http.StatusBadRequest,
+				err.Error(),
 			)
 
 		default:
-			http.Error(
+			httptransport.WriteError(
 				w,
-				"internal server error",
 				http.StatusInternalServerError,
+				"internal server error",
 			)
 		}
 
 		return
 	}
 
-	w.Header().Set(
-		"Content-Type",
-		"application/json",
-	)
-
-	w.WriteHeader(http.StatusOK)
-
-	if err := json.NewEncoder(w).Encode(
+	httptransport.WriteJSON(
+		w,
+		http.StatusOK,
 		toPurchaseResponse(order),
-	); err != nil {
-		return
-	}
+	)
 }
 
 func (h *PurchaseHandler) writeError(
@@ -224,87 +202,87 @@ func (h *PurchaseHandler) writeError(
 		err,
 		service.ErrInvalidPurchase,
 	):
-		http.Error(
+		httptransport.WriteError(
 			w,
-			err.Error(),
 			http.StatusBadRequest,
+			err.Error(),
 		)
 
 	case errors.Is(
 		err,
 		service.ErrInvalidProductID,
 	):
-		http.Error(
+		httptransport.WriteError(
 			w,
-			err.Error(),
 			http.StatusBadRequest,
+			err.Error(),
 		)
 
 	case errors.Is(
 		err,
 		service.ErrInvalidQuantity,
 	):
-		http.Error(
+		httptransport.WriteError(
 			w,
-			err.Error(),
 			http.StatusBadRequest,
+			err.Error(),
 		)
 
 	case errors.Is(
 		err,
 		service.ErrIdempotencyKeyRequired,
 	):
-		http.Error(
+		httptransport.WriteError(
 			w,
-			err.Error(),
 			http.StatusBadRequest,
+			err.Error(),
 		)
 
 	case errors.Is(
 		err,
 		service.ErrProductNotFound,
 	):
-		http.Error(
+		httptransport.WriteError(
 			w,
-			err.Error(),
 			http.StatusNotFound,
+			err.Error(),
 		)
 
 	case errors.Is(
 		err,
 		service.ErrInsufficientStock,
 	):
-		http.Error(
+		httptransport.WriteError(
 			w,
-			err.Error(),
 			http.StatusConflict,
+			err.Error(),
 		)
 
 	case errors.Is(
 		err,
 		service.ErrIdempotencyKeyConflict,
 	):
-		http.Error(
+		httptransport.WriteError(
 			w,
-			err.Error(),
 			http.StatusConflict,
+			err.Error(),
 		)
 
 	case errors.Is(
 		err,
 		service.ErrPaymentDeclined,
 	):
-		http.Error(
+		httptransport.WriteError(
 			w,
-			err.Error(),
 			http.StatusPaymentRequired,
+			err.Error(),
 		)
 
 	default:
-		http.Error(
+		httptransport.WriteError(
 			w,
-			"internal server error",
 			http.StatusInternalServerError,
+			"internal server error",
 		)
 	}
 }

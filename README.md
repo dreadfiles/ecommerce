@@ -131,7 +131,7 @@ Expected structure:
 name,sku,description,category,price,stock,weight_kg
 ```
 
-The CSV is provided to the application as an external input through the product import endpoint. It is not stored as application data in the repository.
+The CSV is provided to the application as external input through the product import endpoint. It is not stored as application data in the repository.
 
 ## Idempotency
 
@@ -199,7 +199,7 @@ Recommended development tools:
 
 Open the project in Visual Studio Code and reopen it in the Dev Container. Docker Compose manages the application and database services.
 
-Using the Dev Container is optional for running the application.
+Using the Dev Container is recommended for development.
 
 ## Project Structure
 
@@ -208,6 +208,13 @@ Using the Dev Container is optional for running the application.
 ├── .devcontainer/
 │   ├── devcontainer.json
 │   └── Dockerfile
+├── cmd/
+│   └── api/
+│       └── main.go
+├── docs/
+│   ├── openapi.yaml
+│   └── troubleshooting.md
+├── frontend/
 ├── internal/
 │   ├── database/
 │   ├── importer/
@@ -215,14 +222,11 @@ Using the Dev Container is optional for running the application.
 │   ├── purchase/
 │   └── transport/
 ├── migrations/
-├── docs/
-│   ├── openapi.yaml
-│   └── troubleshooting.md
+├── tests/
 ├── .gitignore
 ├── docker-compose.yml
 ├── go.mod
 ├── go.sum
-├── main.go
 └── README.md
 ```
 
@@ -267,9 +271,11 @@ To visualize the API documentation:
 4. Paste the YAML content into the editor.
 5. Swagger Editor will render the API documentation and available endpoints.
 
+The OpenAPI file is kept in the repository as the source of truth for the API contract.
+
 ### Troubleshooting
 
-Common problems and solutions are documented in:
+Common development and runtime issues are documented in:
 
 [Troubleshooting Guide](docs/troubleshooting.md)
 

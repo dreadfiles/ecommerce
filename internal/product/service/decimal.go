@@ -13,6 +13,10 @@ func parseDecimal(value string, maxScale int) (*big.Rat, error) {
 		return nil, errors.New("value is required")
 	}
 
+	if strings.HasPrefix(value, "-") {
+		return nil, errors.New("value cannot be negative")
+	}
+
 	if strings.Count(value, ".") > 1 {
 		return nil, errors.New("invalid decimal format")
 	}
@@ -33,17 +37,35 @@ func parseDecimal(value string, maxScale int) (*big.Rat, error) {
 		}
 	}
 
-	rat := new(big.Rat)
+	integerPart := new(big.Int)
+	integerPart.SetString(parts[0], 10)
 
-	if _, ok := rat.SetString(value); !ok {
-		return nil, errors.New("invalid decimal format")
+	if len(parts) == 1 {
+		return new(big.Rat).SetInt(integerPart), nil
 	}
 
-	if rat.Sign() < 0 {
-		return nil, errors.New("value cannot be negative")
-	}
+	decimalPart := new(big.Int)
+	decimalPart.SetString(parts[1], 10)
 
-	return rat, nil
+	scale := len(parts[1])
+
+	denominator := new(big.Int).Exp(
+		big.NewInt(10),
+		big.NewInt(int64(scale)),
+		nil,
+	)
+
+	numerator := new(big.Int).Mul(
+		integerPart,
+		denominator,
+	)
+
+	numerator.Add(numerator, decimalPart)
+
+	return new(big.Rat).SetFrac(
+		numerator,
+		denominator,
+	), nil
 }
 
 func isDigits(value string) bool {

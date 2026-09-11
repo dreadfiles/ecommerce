@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Known development and runtime issues encountered during the project.
+Known development and runtime issues that may occur while running or developing the application.
 
 ## Database
 
@@ -8,25 +8,25 @@ Known development and runtime issues encountered during the project.
 
 **Symptom:** Expected tables are not available after starting the application.
 
-**Cause:** PostgreSQL initialization scripts run only when the database volume is created for the first time.
+**Cause:** PostgreSQL initialization scripts are executed only when the database volume is created for the first time.
 
-**Resolution:** Remove the PostgreSQL volume and restart the services so the scripts under `migrations/` are executed again.
+**Resolution:** Recreate the PostgreSQL volume and start the application again so the scripts under `migrations/` are executed.
 
 ### Database connection fails
 
-**Symptom:** The application cannot establish a database connection.
+**Symptom:** The application cannot establish a connection to PostgreSQL.
 
 **Cause:** Database configuration is missing or incorrect, or the application is using the wrong database host.
 
-**Resolution:** Verify `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME`. When running through Docker Compose, `DB_HOST` must reference the PostgreSQL service.
+**Resolution:** Verify `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME`. When running through Docker Compose, `DB_HOST` must reference the PostgreSQL service name.
 
 ### Database changes are not reflected
 
 **Symptom:** Changes to the initialization scripts do not appear in the existing database.
 
-**Cause:** Existing PostgreSQL volumes are not reinitialized automatically.
+**Cause:** Existing PostgreSQL volumes are not initialized again automatically.
 
-**Resolution:** Recreate the database volume when a clean initialization is required. For persistent environments, use an appropriate database migration instead.
+**Resolution:** Recreate the database volume when a clean initialization is required. For persistent environments, use a proper database migration instead of modifying an already-applied initialization script.
 
 ## Application
 
@@ -34,7 +34,7 @@ Known development and runtime issues encountered during the project.
 
 **Symptom:** The compiler reports that a repository implementation is missing a method such as `GetAll`.
 
-**Cause:** A method was added to the repository interface without updating its implementation.
+**Cause:** A method was added to the repository interface without updating its concrete implementation.
 
 **Resolution:** Implement the required method in the concrete repository and update the related service if necessary.
 
@@ -42,9 +42,9 @@ Known development and runtime issues encountered during the project.
 
 **Symptom:** The compiler reports an undefined identifier.
 
-**Cause:** An incorrect package qualifier or variable name was introduced.
+**Cause:** An incorrect package qualifier, variable name, or missing import was introduced.
 
-**Resolution:** Verify the package import and use the correct error or identifier.
+**Resolution:** Verify the package import and use the correct identifier.
 
 ## CSV Import
 
@@ -120,7 +120,7 @@ Known development and runtime issues encountered during the project.
 
 **Cause:** Product prices must be controlled by the server.
 
-**Resolution:** The purchase flow obtains a quote from the current database values before processing the purchase.
+**Resolution:** The purchase flow obtains a quote using the current database price before processing the purchase.
 
 ### Stock changes between quote and purchase
 
@@ -128,7 +128,7 @@ Known development and runtime issues encountered during the project.
 
 **Cause:** Another transaction may have changed the inventory after the quote was generated.
 
-**Resolution:** Stock is checked again inside the purchase transaction using row-level locking. The final database state is authoritative.
+**Resolution:** Stock is checked again during purchase creation. The final database state is authoritative.
 
 ### Concurrent purchases consume the same stock
 
@@ -178,7 +178,7 @@ Known development and runtime issues encountered during the project.
 
 **Cause:** Requests can reach the application at nearly the same time.
 
-**Resolution:** The database unique constraint on the idempotency key provides an additional concurrency safeguard.
+**Resolution:** The database unique constraint on the idempotency key provides an additional safeguard against duplicate requests.
 
 ## Payment
 
@@ -188,7 +188,7 @@ Known development and runtime issues encountered during the project.
 
 **Cause:** The fake payment provider is configured to simulate a declined payment.
 
-**Resolution:** Remove the failure simulation header when a successful payment is required.
+**Resolution:** Remove the `X-Fake-Payment: fail` header when a successful payment is required.
 
 ## HTTP API
 
@@ -198,13 +198,21 @@ Known development and runtime issues encountered during the project.
 
 **Cause:** The request body contains invalid JSON or does not match the expected DTO.
 
-**Resolution:** Send a valid payload according to the endpoint contract.
+**Resolution:** Send a valid JSON payload according to the endpoint contract defined in `docs/openapi.yaml`.
+
+### Invalid path parameter
+
+**Symptom:** An endpoint rejects a product or purchase ID.
+
+**Cause:** The path parameter is missing, invalid, or does not represent a valid identifier.
+
+**Resolution:** Verify that the requested ID is a valid positive integer.
 
 ### Unexpected HTTP 500
 
 **Symptom:** The API returns an internal server error.
 
-**Cause:** An unexpected infrastructure or application error occurred.
+**Cause:** An unexpected application or infrastructure error occurred.
 
 **Resolution:** Review the application logs and verify database connectivity and configuration.
 
@@ -216,21 +224,21 @@ Known development and runtime issues encountered during the project.
 
 **Cause:** The application container is not running or the host port is unavailable.
 
-**Resolution:** Verify the Docker services and confirm that port `18080` is available.
+**Resolution:** Verify that the Docker services are running and that port `18080` is available.
 
-### PostgreSQL is not ready when the application starts
+### PostgreSQL is not ready
 
-**Symptom:** The application initially cannot connect to PostgreSQL during startup.
+**Symptom:** The application cannot connect to PostgreSQL during startup.
 
-**Cause:** Container startup does not guarantee that PostgreSQL is immediately ready to accept connections.
+**Cause:** PostgreSQL may still be starting when the application attempts to connect.
 
-**Resolution:** The database connection uses retry handling to tolerate temporary PostgreSQL startup delays.
+**Resolution:** Verify that the PostgreSQL container is healthy and that the database configuration is correct.
 
 ### Application changes are not reflected
 
-**Symptom:** Source changes are not visible in the running application.
+**Symptom:** Source or dependency changes are not reflected in the running application.
 
-**Cause:** The application image may contain a previous build.
+**Cause:** The application may be running from an image built before the changes were made.
 
 **Resolution:** Rebuild the application image when source or dependency changes require a new image.
 

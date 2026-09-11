@@ -10,6 +10,7 @@ import (
 	"ecommerce/internal/product/dto"
 	"ecommerce/internal/product/repository"
 	"ecommerce/internal/product/service"
+	httptransport "ecommerce/internal/transport/http"
 )
 
 type ProductHandler struct {
@@ -24,11 +25,18 @@ func NewProductHandler(
 	}
 }
 
-func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
+func (h *ProductHandler) Create(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 	var request dto.CreateProductRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		httptransport.WriteError(
+			w,
+			http.StatusBadRequest,
+			"invalid request body",
+		)
 		return
 	}
 
@@ -42,78 +50,147 @@ func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
 		WeightKg:    request.WeightKg,
 	}
 
-	if err := h.productService.Create(r.Context(), product); err != nil {
-		if errors.Is(err, repository.ErrConflict) {
-			http.Error(w, err.Error(), http.StatusConflict)
-			return
+	if err := h.productService.Create(
+		r.Context(),
+		product,
+	); err != nil {
+		switch {
+		case errors.Is(err, repository.ErrConflict):
+			httptransport.WriteError(
+				w,
+				http.StatusConflict,
+				err.Error(),
+			)
+
+		default:
+			httptransport.WriteError(
+				w,
+				http.StatusBadRequest,
+				err.Error(),
+			)
 		}
 
-		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	response := toProductResponse(product)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-
-	_ = json.NewEncoder(w).Encode(response)
+	httptransport.WriteJSON(
+		w,
+		http.StatusCreated,
+		toProductResponse(product),
+	)
 }
 
-func (h *ProductHandler) GetAll(w http.ResponseWriter, r *http.Request) {
-	products, err := h.productService.GetAll(r.Context())
+func (h *ProductHandler) GetAll(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	products, err := h.productService.GetAll(
+		r.Context(),
+	)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httptransport.WriteError(
+			w,
+			http.StatusInternalServerError,
+			"internal server error",
+		)
 		return
 	}
 
-	response := make([]dto.ProductResponse, 0, len(products))
+	response := make(
+		[]dto.ProductResponse,
+		0,
+		len(products),
+	)
 
 	for _, product := range products {
-		response = append(response, toProductResponse(product))
+		response = append(
+			response,
+			toProductResponse(product),
+		)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	_ = json.NewEncoder(w).Encode(response)
+	httptransport.WriteJSON(
+		w,
+		http.StatusOK,
+		response,
+	)
 }
 
-func (h *ProductHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+func (h *ProductHandler) GetByID(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	id, err := strconv.ParseInt(
+		r.PathValue("id"),
+		10,
+		64,
+	)
 	if err != nil || id <= 0 {
-		http.Error(w, "invalid product id", http.StatusBadRequest)
+		httptransport.WriteError(
+			w,
+			http.StatusBadRequest,
+			"invalid product id",
+		)
 		return
 	}
 
-	product, err := h.productService.GetByID(r.Context(), id)
+	product, err := h.productService.GetByID(
+		r.Context(),
+		id,
+	)
 	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			http.Error(w, err.Error(), http.StatusNotFound)
-			return
+		switch {
+		case errors.Is(err, repository.ErrNotFound):
+			httptransport.WriteError(
+				w,
+				http.StatusNotFound,
+				err.Error(),
+			)
+
+		default:
+			httptransport.WriteError(
+				w,
+				http.StatusInternalServerError,
+				"internal server error",
+			)
 		}
 
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	_ = json.NewEncoder(w).Encode(toProductResponse(product))
+	httptransport.WriteJSON(
+		w,
+		http.StatusOK,
+		toProductResponse(product),
+	)
 }
 
-func (h *ProductHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+func (h *ProductHandler) Update(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	id, err := strconv.ParseInt(
+		r.PathValue("id"),
+		10,
+		64,
+	)
 	if err != nil || id <= 0 {
-		http.Error(w, "invalid product id", http.StatusBadRequest)
+		httptransport.WriteError(
+			w,
+			http.StatusBadRequest,
+			"invalid product id",
+		)
 		return
 	}
 
 	var request dto.CreateProductRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		httptransport.WriteError(
+			w,
+			http.StatusBadRequest,
+			"invalid request body",
+		)
 		return
 	}
 
@@ -128,74 +205,143 @@ func (h *ProductHandler) Update(w http.ResponseWriter, r *http.Request) {
 		WeightKg:    request.WeightKg,
 	}
 
-	if err := h.productService.Update(r.Context(), product); err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			http.Error(w, err.Error(), http.StatusNotFound)
-			return
+	if err := h.productService.Update(
+		r.Context(),
+		product,
+	); err != nil {
+		switch {
+		case errors.Is(err, repository.ErrNotFound):
+			httptransport.WriteError(
+				w,
+				http.StatusNotFound,
+				err.Error(),
+			)
+
+		case errors.Is(err, repository.ErrConflict):
+			httptransport.WriteError(
+				w,
+				http.StatusConflict,
+				err.Error(),
+			)
+
+		default:
+			httptransport.WriteError(
+				w,
+				http.StatusBadRequest,
+				err.Error(),
+			)
 		}
 
-		if errors.Is(err, repository.ErrConflict) {
-			http.Error(w, err.Error(), http.StatusConflict)
-			return
-		}
-
-		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	_ = json.NewEncoder(w).Encode(toProductResponse(product))
+	httptransport.WriteJSON(
+		w,
+		http.StatusOK,
+		toProductResponse(product),
+	)
 }
 
-func (h *ProductHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+func (h *ProductHandler) Delete(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	id, err := strconv.ParseInt(
+		r.PathValue("id"),
+		10,
+		64,
+	)
 	if err != nil || id <= 0 {
-		http.Error(w, "invalid product id", http.StatusBadRequest)
+		httptransport.WriteError(
+			w,
+			http.StatusBadRequest,
+			"invalid product id",
+		)
 		return
 	}
 
-	if err := h.productService.Delete(r.Context(), id); err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			http.Error(w, err.Error(), http.StatusNotFound)
-			return
+	if err := h.productService.Delete(
+		r.Context(),
+		id,
+	); err != nil {
+		switch {
+		case errors.Is(err, repository.ErrNotFound):
+			httptransport.WriteError(
+				w,
+				http.StatusNotFound,
+				err.Error(),
+			)
+
+		default:
+			httptransport.WriteError(
+				w,
+				http.StatusInternalServerError,
+				"internal server error",
+			)
 		}
 
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *ProductHandler) Search(w http.ResponseWriter, r *http.Request) {
+func (h *ProductHandler) Search(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 	query := r.URL.Query().Get("q")
 
-	products, err := h.productService.Search(r.Context(), query)
+	products, err := h.productService.Search(
+		r.Context(),
+		query,
+	)
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidSearchQuery) {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
+		switch {
+		case errors.Is(
+			err,
+			service.ErrInvalidSearchQuery,
+		):
+			httptransport.WriteError(
+				w,
+				http.StatusBadRequest,
+				err.Error(),
+			)
+
+		default:
+			httptransport.WriteError(
+				w,
+				http.StatusInternalServerError,
+				"internal server error",
+			)
 		}
 
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	response := make([]dto.ProductResponse, 0, len(products))
+	response := make(
+		[]dto.ProductResponse,
+		0,
+		len(products),
+	)
 
 	for _, product := range products {
-		response = append(response, toProductResponse(product))
+		response = append(
+			response,
+			toProductResponse(product),
+		)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	_ = json.NewEncoder(w).Encode(response)
+	httptransport.WriteJSON(
+		w,
+		http.StatusOK,
+		response,
+	)
 }
 
-func toProductResponse(product *domain.Product) dto.ProductResponse {
+func toProductResponse(
+	product *domain.Product,
+) dto.ProductResponse {
 	return dto.ProductResponse{
 		ID:          product.ID,
 		Name:        product.Name,

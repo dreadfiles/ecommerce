@@ -13,6 +13,7 @@ import (
 	purchasehandler "ecommerce/internal/purchase/handler"
 	purchaserepository "ecommerce/internal/purchase/repository"
 	purchaseservice "ecommerce/internal/purchase/service"
+	"ecommerce/internal/router"
 )
 
 const serverAddress = ":8080"
@@ -25,29 +26,42 @@ func main() {
 	defer db.Close()
 
 	productRepository := productrepository.NewPostgresProductRepository(db)
-	productService := productservice.NewProductService(productRepository)
-	productHandler := producthandler.NewProductHandler(productService)
 
-	productImportService := importerservice.NewProductImportService(productRepository)
-	productImportHandler := importerhandler.NewProductImportHandler(productImportService)
+	productService := productservice.NewProductService(
+		productRepository,
+	)
 
-	purchaseRepository := purchaserepository.NewPostgresPurchaseRepository(db)
-	purchaseService := purchaseservice.NewPurchaseService(purchaseRepository)
-	purchaseHandler := purchasehandler.NewPurchaseHandler(purchaseService)
+	productHandler := producthandler.NewProductHandler(
+		productService,
+	)
 
-	mux := http.NewServeMux()
+	productImportService := importerservice.NewProductImportService(
+		productRepository,
+	)
 
-	mux.HandleFunc("POST /api/v1/products", productHandler.Create)
-	mux.HandleFunc("GET /api/v1/products", productHandler.GetAll)
-	mux.HandleFunc("GET /api/v1/products/search", productHandler.Search)
-	mux.HandleFunc("GET /api/v1/products/{id}", productHandler.GetByID)
-	mux.HandleFunc("PUT /api/v1/products/{id}", productHandler.Update)
-	mux.HandleFunc("DELETE /api/v1/products/{id}", productHandler.Delete)
-	mux.HandleFunc("POST /api/v1/products/import", productImportHandler.Import)
+	productImportHandler := importerhandler.NewProductImportHandler(
+		productImportService,
+	)
 
-	mux.HandleFunc("POST /api/v1/purchases", purchaseHandler.Create)
-	mux.HandleFunc("GET /api/v1/purchases", purchaseHandler.GetAll)
-	mux.HandleFunc("GET /api/v1/purchases/{id}", purchaseHandler.GetByID)
+	purchaseRepository := purchaserepository.NewPostgresPurchaseRepository(
+		db,
+	)
+
+	purchaseService := purchaseservice.NewPurchaseService(
+		purchaseRepository,
+	)
+
+	purchaseHandler := purchasehandler.NewPurchaseHandler(
+		purchaseService,
+	)
+
+	handler := router.New(
+		router.Dependencies{
+			ProductHandler:  productHandler,
+			ImportHandler:   productImportHandler,
+			PurchaseHandler: purchaseHandler,
+		},
+	)
 
 	log.Printf(
 		"server listening on %s",
@@ -56,7 +70,7 @@ func main() {
 
 	if err := http.ListenAndServe(
 		serverAddress,
-		mux,
+		handler,
 	); err != nil {
 		log.Fatal(err)
 	}

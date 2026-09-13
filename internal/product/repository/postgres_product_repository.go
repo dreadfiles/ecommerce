@@ -12,6 +12,7 @@ import (
 )
 
 const postgresUniqueViolationCode = "23505"
+const postgresForeignKeyViolationCode = "23503"
 
 type PostgresProductRepository struct {
 	db *sql.DB
@@ -237,6 +238,13 @@ func (r *PostgresProductRepository) Delete(
 
 	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
+		var pqErr *pq.Error
+
+		if errors.As(err, &pqErr) &&
+			pqErr.Code == postgresForeignKeyViolationCode {
+			return ErrHasPurchases
+		}
+
 		return fmt.Errorf("delete product: %w", err)
 	}
 

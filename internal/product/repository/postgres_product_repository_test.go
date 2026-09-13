@@ -780,6 +780,18 @@ func TestPostgresProductRepository_Delete(t *testing.T) {
 			},
 		},
 		{
+			name: "product has purchases",
+			id:   1,
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectExec(query).
+					WithArgs(int64(1)).
+					WillReturnError(
+						&pq.Error{Code: "23503"},
+					)
+			},
+			wantErr: ErrHasPurchases,
+		},
+		{
 			name: "database error",
 			id:   1,
 			setupMock: func(mock sqlmock.Sqlmock) {
@@ -844,6 +856,13 @@ func TestPostgresProductRepository_Delete(t *testing.T) {
 					if !errors.Is(err, ErrNotFound) {
 						t.Fatalf(
 							"expected ErrNotFound, got %v",
+							err,
+						)
+					}
+				} else if tt.wantErr == ErrHasPurchases {
+					if !errors.Is(err, ErrHasPurchases) {
+						t.Fatalf(
+							"expected ErrHasPurchases, got %v",
 							err,
 						)
 					}

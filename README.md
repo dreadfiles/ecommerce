@@ -19,6 +19,7 @@ A modular e-commerce application built with Go and PostgreSQL, focused on transa
 * Docker-based execution
 * Versioned REST API
 * OpenAPI API documentation
+* Postman API collection and environment
 * Automated unit tests
 * End-to-end integration tests
 * 99.5% overall statement coverage
@@ -32,6 +33,7 @@ A modular e-commerce application built with Go and PostgreSQL, focused on transa
 | Docker / Docker Compose | Containerization and service orchestration |
 | Dev Containers          | Reproducible development environment       |
 | OpenAPI                 | REST API contract and documentation        |
+| Postman                 | API testing and request collection         |
 
 ## Architecture
 
@@ -68,7 +70,7 @@ Data types follow the business requirements:
 * **Stock:** integer because inventory represents whole units.
 * **Money calculations:** `math/big.Rat` avoids floating-point precision errors.
 
-### Transactional Purchase Flow
+## Transactional Purchase Flow
 
 Purchase creation follows a server-side transactional workflow:
 
@@ -132,6 +134,17 @@ Purchase creation and stock updates are executed in a database transaction, prov
 
 `FOR UPDATE` locks the relevant product rows during stock-sensitive operations to prevent concurrent purchases from consuming the same inventory.
 
+## Documentation & API Testing
+
+The `docs/` directory contains the API documentation and Postman files used to test the application.
+
+* [OpenAPI specification](docs/openapi.yaml) — machine-readable API contract describing the available endpoints, request/response schemas, and API behavior.
+* [Postman Collection](docs/ecommerce.postman_collection.json) — collection containing API requests and test scenarios for products, searches, CSV import, and purchases.
+* [Postman Environment](docs/ecommerce-local.postman_environment.json) — local environment containing the `base_url` variable used by the Postman collection.
+* [Troubleshooting guide](docs/troubleshooting.md) — common issues and solutions for running and testing the application.
+
+The Postman collection can be imported into Postman together with the environment to execute the documented API scenarios against the local application.
+
 ## CSV Import
 
 The complete CSV is validated before persistence to prevent partial imports.
@@ -151,8 +164,6 @@ Expected structure:
 ```text
 name,sku,description,category,price,stock,weight_kg
 ```
-
-The CSV is provided to the application as external input through the product import endpoint. It is not stored as application data in the repository.
 
 ## Idempotency
 
@@ -223,6 +234,7 @@ The E2E suite covers:
 * API error responses
 * Database persistence
 * Transactional purchase flows
+* Product deletion protection when purchases exist
 
 This validates the integration between the HTTP, service, repository, and database layers.
 
@@ -349,9 +361,11 @@ The development and reviewer environments use the same PostgreSQL service and pe
 
 ```text
 Development:
+
 app-dev + db
 
 Reviewer:
+
 app + db
 ```
 
@@ -368,6 +382,8 @@ When the Dev Container is closed, the `app-dev` container is removed while the P
 │   └── api/
 │       └── main.go
 ├── docs/
+│   ├── ecommerce.postman_collection.json
+│   ├── ecommerce-local.postman_environment.json
 │   ├── openapi.yaml
 │   └── troubleshooting.md
 ├── internal/
@@ -424,4 +440,19 @@ The main decisions were driven by consistency, maintainability, testability, and
 ## Alternatives Considered
 
 * Floating-point arithmetic was rejected for monetary calculations because of precision risks.
-* Direct database access from handlers was rejected to avoid coupl
+
+* Direct database access from handlers was rejected to avoid coupling HTTP transport to persistence.
+
+* Client-provided prices were rejected as a source of truth because prices must be determined server-side.
+
+* Partial CSV persistence was rejected to prevent inconsistent imports.
+
+* Deleting products with existing purchases was rejected because historical purchase references must remain valid. The database foreign key constraint is used as the final integrity barrier, and the API returns `409 Conflict`.
+
+* A real payment provider was not implemented because the challenge does not require external payment processing. A fake provider behind an interface keeps the purchase flow testable and extensible.
+
+## Conclusion
+
+This project demonstrates a complete Go backend implementation with clear separation of responsibilities, transactional data management, concurrency-safe inventory handling, idempotent purchases, validated data imports, automated testing, and containerized execution.
+
+The design prioritizes correctness, maintainability, and testability while keeping the codebase simple enough to understand and extend.

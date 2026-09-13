@@ -270,13 +270,15 @@ across the `internal` application packages.
 
 ## Run the Application
 
-### Requirements
+### Reviewer Environment
+
+The application can be executed by a reviewer using Docker only.
+
+#### Requirements
 
 * Docker
-* Visual Studio Code
-* Dev Containers extension
 
-Docker Compose is provided to start the application and PostgreSQL services together.
+No local Go or PostgreSQL installation is required.
 
 From the project root:
 
@@ -284,12 +286,19 @@ From the project root:
 docker compose up --build
 ```
 
-The database is initialized using the SQL scripts under `migrations/`.
+This starts the application and PostgreSQL services:
+
+```text
+app
+db
+```
+
+The development-only `app-dev` service is not started by the standard reviewer workflow.
 
 The API is available at:
 
 ```text
-http://localhost:18080
+http://localhost:8080
 ```
 
 To stop the application:
@@ -298,11 +307,21 @@ To stop the application:
 docker compose down
 ```
 
+The PostgreSQL data volume is preserved when using `docker compose down`.
+
+To remove the PostgreSQL data volume and initialize the database from scratch:
+
+```bash
+docker compose down -v
+```
+
+The database is initialized using the SQL scripts under `migrations/`.
+
 ## Development Environment
 
 The project includes a Dev Container configuration for a consistent and reproducible development environment.
 
-Recommended development tools:
+### Requirements
 
 * Docker
 * Visual Studio Code
@@ -310,9 +329,33 @@ Recommended development tools:
 
 Open the project in Visual Studio Code and reopen it in the Dev Container.
 
-The Dev Container provides the development environment and integrates Docker Compose with the application and PostgreSQL services.
+The Dev Container uses the `app-dev` service and the same PostgreSQL service defined in the root Docker Compose configuration.
 
-Using the Dev Container is recommended for development.
+The development application service uses the Docker Compose `dev` profile and is started automatically by the Dev Container configuration.
+
+Inside the Dev Container, the API can be started with:
+
+```bash
+go run ./cmd/api
+```
+
+The API is available at:
+
+```text
+http://localhost:8080
+```
+
+The development and reviewer environments use the same PostgreSQL service and persistent database volume while keeping the application containers separated:
+
+```text
+Development:
+app-dev + db
+
+Reviewer:
+app + db
+```
+
+When the Dev Container is closed, the `app-dev` container is removed while the PostgreSQL container and its persistent data remain available.
 
 ## Project Structure
 
@@ -327,7 +370,6 @@ Using the Dev Container is recommended for development.
 ├── docs/
 │   ├── openapi.yaml
 │   └── troubleshooting.md
-├── frontend/
 ├── internal/
 │   ├── database/
 │   ├── importer/
@@ -349,10 +391,12 @@ Using the Dev Container is recommended for development.
 │   │   └── service/
 │   ├── router/
 │   └── transport/
+│       └── http/
 ├── migrations/
 ├── tests/
 ├── .gitignore
 ├── docker-compose.yml
+├── Dockerfile
 ├── go.mod
 ├── go.sum
 └── README.md
@@ -375,46 +419,9 @@ The main decisions were driven by consistency, maintainability, testability, and
 * **API versioning:** provides a stable evolution path.
 * **OpenAPI:** provides an explicit and machine-readable API contract.
 * **Automated testing:** validates business logic and end-to-end application behavior.
+* **Docker Compose profiles:** separate the development application service from the standard reviewer workflow while keeping a single PostgreSQL service.
 
 ## Alternatives Considered
 
 * Floating-point arithmetic was rejected for monetary calculations because of precision risks.
-* Direct database access from handlers was rejected to avoid coupling transport and persistence.
-* Partial CSV imports were rejected to preserve consistency.
-* Provider-specific payment logic was rejected to keep future integrations replaceable.
-* Database-specific logic in the domain was rejected to preserve separation of concerns.
-* Trusting client-provided product prices was rejected to prevent inconsistent or manipulated purchase totals.
-
-## Documentation
-
-### OpenAPI
-
-The complete API contract is available in:
-
-[OpenAPI Specification](docs/openapi.yaml)
-
-To visualize the API documentation:
-
-1. Open `docs/openapi.yaml`.
-2. Copy the complete contents of the file.
-3. Open [Swagger Editor](https://editor.swagger.io/).
-4. Paste the YAML content into the editor.
-5. Swagger Editor will render the API documentation and available endpoints.
-
-The OpenAPI file is kept in the repository as the source of truth for the API contract.
-
-### Troubleshooting
-
-Common development and runtime issues are documented in:
-
-[Troubleshooting Guide](docs/troubleshooting.md)
-
-## Challenge Scope
-
-The implementation covers the requested product management, CSV import, product search, purchase processing, fake payment, local database, containerization, API documentation, automated testing, and documented engineering decisions.
-
-The application is designed to demonstrate production-oriented backend practices including modular architecture, transactional consistency, concurrency control, idempotency, validation, persistence abstraction, and automated testing.
-
-## License
-
-This project was developed as part of an e-commerce code challenge.
+* Direct database access from handlers was rejected to avoid coupl

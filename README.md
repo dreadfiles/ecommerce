@@ -4,7 +4,7 @@
 
 **CSV Download Date: November 7, 2026**
 
-A modular e-commerce application built with Go and PostgreSQL, focused on transactional consistency, inventory control, idempotent purchases, validation, concurrency safety, and extensibility.
+A modular e-commerce application built with Go, Vue, PostgreSQL, Docker, and Nginx, focused on transactional consistency, inventory control, idempotent purchases, validation, concurrency safety, and extensibility.
 
 ## Features
 
@@ -17,6 +17,8 @@ A modular e-commerce application built with Go and PostgreSQL, focused on transa
 * Fake payment provider
 * PostgreSQL persistence
 * Docker-based execution
+* Vue web interface
+* Nginx reverse proxy
 * Versioned REST API
 * OpenAPI API documentation
 * Postman API collection and environment
@@ -26,20 +28,24 @@ A modular e-commerce application built with Go and PostgreSQL, focused on transa
 
 ## Technology Stack
 
-| Technology              | Purpose                                    |
-| ----------------------- | ------------------------------------------ |
-| Go                      | Backend application                        |
-| PostgreSQL 16           | Relational persistence                     |
-| Docker / Docker Compose | Containerization and service orchestration |
-| Dev Containers          | Reproducible development environment       |
-| OpenAPI                 | REST API contract and documentation        |
-| Postman                 | API testing and request collection         |
+| Technology              | Purpose                                      |
+| ----------------------- | -------------------------------------------- |
+| Go 1.27                 | Backend application and REST API             |
+| Vue 3                   | Web frontend                                 |
+| Vite                    | Frontend development and build tooling       |
+| Node.js 22              | Frontend build environment                   |
+| Nginx 1.27              | Static frontend server and API reverse proxy |
+| PostgreSQL 16           | Relational persistence                       |
+| Docker / Docker Compose | Containerization and service orchestration   |
+| Dev Containers          | Reproducible development environment         |
+| OpenAPI                 | REST API contract and documentation          |
+| Postman                 | API testing and request collection           |
 
 ## Architecture
 
 The application follows a **modular layered architecture**, with separate `product`, `purchase`, and `importer` modules.
 
-Each module separates responsibilities through:
+Each backend module separates responsibilities through:
 
 ```text
 Handler → Service → Repository → Database
@@ -54,6 +60,31 @@ Handler → Service → Repository → Database
 This separation reduces coupling and keeps business logic independent from transport and infrastructure concerns.
 
 Repository and payment interfaces allow infrastructure implementations to evolve independently from the business layer.
+
+### Frontend and API Architecture
+
+The web application is served through Nginx and communicates with the Go API using the same origin:
+
+```text
+Browser
+   │
+   ▼
+Nginx :80
+   │
+   ├── Vue static files
+   │
+   └── /api/*
+          │
+          ▼
+       Go API :8080
+          │
+          ▼
+      PostgreSQL :5432
+```
+
+The frontend uses `/api/v1` as its API base path.
+
+Nginx proxies requests under `/api/` to the Go backend, avoiding the need for browser-side CORS configuration.
 
 ## Database
 
@@ -133,6 +164,54 @@ Before creating a purchase, the system obtains a server-side quote using current
 Purchase creation and stock updates are executed in a database transaction, providing all-or-nothing behavior.
 
 `FOR UPDATE` locks the relevant product rows during stock-sensitive operations to prevent concurrent purchases from consuming the same inventory.
+
+## Web Application
+
+The project includes a Vue-based web application under the `view/` directory.
+
+The frontend provides:
+
+* Product listing
+* Product search
+* Product creation
+* Product editing
+* Product deletion
+* CSV product import
+* Shopping cart
+* Quantity management
+* Purchase creation
+* Payment failure simulation
+* Purchase result display
+* Responsive user interface
+
+The shopping cart can be accessed from the cart control in the application header. Adding a product automatically focuses the shopping cart section.
+
+After a successful purchase, the purchase result is displayed and automatically focused so the user can immediately review the completed transaction.
+
+Completed purchase results can be closed from the interface without affecting the persisted purchase.
+
+The CSV import section can also be opened and closed when needed, keeping the main product management interface focused on the product list.
+
+### Frontend Structure
+
+```text
+view/
+├── Dockerfile
+├── nginx.conf
+├── package.json
+├── package-lock.json
+├── vite.config.js
+├── index.html
+└── src/
+    ├── api.js
+    ├── App.vue
+    ├── main.js
+    └── style.css
+```
+
+The frontend build is performed inside the Docker image using Node.js 22.
+
+The generated Vue application is served by Nginx.
 
 ## Documentation & API Testing
 
@@ -284,13 +363,13 @@ across the `internal` application packages.
 
 ### Reviewer Environment
 
-The application can be executed by a reviewer using Docker only.
+The complete application can be executed by a reviewer using Docker only.
 
-#### Requirements
+### Requirements
 
 * Docker
 
-No local Go or PostgreSQL installation is required.
+No local Go, Node.js, npm, or PostgreSQL installation is required.
 
 From the project root:
 
@@ -298,19 +377,90 @@ From the project root:
 docker compose up --build
 ```
 
-This starts the application and PostgreSQL services:
+This starts the complete application stack:
 
 ```text
+view
 app
 db
 ```
 
-The development-only `app-dev` service is not started by the standard reviewer workflow.
+The services are connected through the Docker Compose network.
 
-The API is available at:
+### Web Application
+
+The main application is available at:
+
+```text
+http://localhost
+```
+
+The Vue frontend is served by Nginx on port `80`.
+
+Nginx also proxies frontend API requests under `/api/` to the Go backend.
+
+### Backend API
+
+The Go REST API is also directly available at:
 
 ```text
 http://localhost:8080
+```
+
+This endpoint is useful for direct API testing with Postman or other HTTP clients.
+
+### PostgreSQL
+
+PostgreSQL runs inside the `db` container on port `5432` within the Docker network.
+
+The database is not required to be installed locally.
+
+The default Docker Compose database configuration is:
+
+```text
+Host: db
+Port: 5432
+Database: ecommerce
+User: ecommerce
+Password: ecommerce
+```
+
+### Docker Services
+
+The standard reviewer workflow uses:
+
+```text
+view
+├── Vue application
+└── Nginx :80
+
+app
+└── Go API :8080
+
+db
+└── PostgreSQL :5432
+```
+
+The complete request flow is:
+
+```text
+Browser
+   │
+   ▼
+localhost:80
+   │
+   ▼
+Nginx
+   │
+   ├── Vue application
+   │
+   └── /api/*
+          │
+          ▼
+      app:8080
+          │
+          ▼
+      db:5432
 ```
 
 To stop the application:
@@ -366,10 +516,48 @@ app-dev + db
 
 Reviewer:
 
-app + db
+view + app + db
 ```
 
-When the Dev Container is closed, the `app-dev` container is removed while the PostgreSQL container and its persistent data remain available.
+The `view` service is part of the reviewer/full Docker application workflow. The Dev Container is focused on backend development and does not replace the frontend production container.
+
+When the Dev Container is closed, the `app-dev` container is removed while the PostgreSQL container and its persistent data remain available according to the Docker Compose lifecycle.
+
+## Frontend Development
+
+The frontend source code is located under `view/`.
+
+The frontend can be built using the Docker-based environment without requiring Node.js or npm to be installed on the host machine.
+
+The production frontend image uses:
+
+```text
+Node.js 22 Alpine
+        │
+        ▼
+   Vite build
+        │
+        ▼
+  Nginx 1.27 Alpine
+```
+
+The frontend uses the API base path:
+
+```text
+/api/v1
+```
+
+When running the complete Docker application, Nginx forwards these requests to the Go API.
+
+The frontend dependencies are locked using:
+
+```text
+view/package-lock.json
+```
+
+The Docker build uses `npm ci` to provide reproducible dependency installation.
+
+The `view/node_modules` directory is generated during dependency installation and should not be committed to the repository.
 
 ## Project Structure
 
@@ -410,6 +598,18 @@ When the Dev Container is closed, the `app-dev` container is removed while the P
 │       └── http/
 ├── migrations/
 ├── tests/
+├── view/
+│   ├── src/
+│   │   ├── api.js
+│   │   ├── App.vue
+│   │   ├── main.js
+│   │   └── style.css
+│   ├── Dockerfile
+│   ├── nginx.conf
+│   ├── index.html
+│   ├── package.json
+│   ├── package-lock.json
+│   └── vite.config.js
 ├── .gitignore
 ├── docker-compose.yml
 ├── Dockerfile
@@ -435,6 +635,9 @@ The main decisions were driven by consistency, maintainability, testability, and
 * **API versioning:** provides a stable evolution path.
 * **OpenAPI:** provides an explicit and machine-readable API contract.
 * **Automated testing:** validates business logic and end-to-end application behavior.
+* **Vue:** provides a lightweight web interface for interacting with the ecommerce application.
+* **Nginx:** serves the compiled frontend and provides a reverse proxy for API requests.
+* **Docker Compose:** orchestrates the frontend, backend, and database services.
 * **Docker Compose profiles:** separate the development application service from the standard reviewer workflow while keeping a single PostgreSQL service.
 
 ## Alternatives Considered
@@ -451,8 +654,30 @@ The main decisions were driven by consistency, maintainability, testability, and
 
 * A real payment provider was not implemented because the challenge does not require external payment processing. A fake provider behind an interface keeps the purchase flow testable and extensible.
 
+* Serving the frontend directly from the Vite development server was not used in the reviewer workflow. The production frontend is built into a container and served through Nginx.
+
+* A separate frontend API origin was avoided. Nginx uses the same origin for the web application and `/api/` requests, simplifying deployment and avoiding unnecessary CORS configuration.
+
 ## Conclusion
 
-This project demonstrates a complete Go backend implementation with clear separation of responsibilities, transactional data management, concurrency-safe inventory handling, idempotent purchases, validated data imports, automated testing, and containerized execution.
+This project demonstrates a complete Go backend and Vue web application with clear separation of responsibilities, transactional data management, concurrency-safe inventory handling, idempotent purchases, validated data imports, automated testing, and containerized execution.
 
 The design prioritizes correctness, maintainability, and testability while keeping the codebase simple enough to understand and extend.
+
+The complete Docker environment provides a straightforward reviewer experience:
+
+```text
+docker compose up --build
+```
+
+Then open:
+
+```text
+http://localhost
+```
+
+The web interface provides access to the ecommerce functionality, while the backend API remains directly available at:
+
+```text
+http://localhost:8080
+```

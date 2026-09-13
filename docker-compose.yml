@@ -16,6 +16,15 @@ services:
       DB_PASSWORD: ecommerce
       DB_NAME: ecommerce
 
+  view:
+    build:
+      context: ./view
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - app
+
   app-dev:
     profiles:
       - dev

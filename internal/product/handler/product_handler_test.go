@@ -514,6 +514,7 @@ func TestProductHandler_Delete(t *testing.T) {
 		id             string
 		serviceError   error
 		expectedStatus int
+		expectedError  string
 	}{
 		{
 			name:           "deletes product successfully",
@@ -535,6 +536,13 @@ func TestProductHandler_Delete(t *testing.T) {
 			id:             "999",
 			serviceError:   repository.ErrNotFound,
 			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name:           "returns conflict when product has purchases",
+			id:             "1",
+			serviceError:   repository.ErrHasPurchases,
+			expectedStatus: http.StatusConflict,
+			expectedError:  repository.ErrHasPurchases.Error(),
 		},
 		{
 			name:           "returns internal server error",
@@ -575,6 +583,27 @@ func TestProductHandler_Delete(t *testing.T) {
 					tt.expectedStatus,
 					recorder.Code,
 				)
+			}
+
+			if tt.expectedError != "" {
+				var response map[string]string
+
+				if err := json.NewDecoder(
+					recorder.Body,
+				).Decode(&response); err != nil {
+					t.Fatalf(
+						"failed to decode error response: %v",
+						err,
+					)
+				}
+
+				if response["error"] != tt.expectedError {
+					t.Fatalf(
+						"expected error %q, got %q",
+						tt.expectedError,
+						response["error"],
+					)
+				}
 			}
 		})
 	}

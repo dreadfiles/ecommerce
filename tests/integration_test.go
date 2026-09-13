@@ -545,6 +545,114 @@ func TestIntegration_ProductDelete(t *testing.T) {
 	}
 }
 
+func TestIntegration_DeleteProductWithPurchases(t *testing.T) {
+	ts := newTestServer(t)
+
+	product := createProduct(
+		t,
+		ts,
+		"Purchased Product",
+		newSKU(t),
+		"25.00",
+		10,
+	)
+
+	createPurchase(
+		t,
+		ts,
+		product.ID,
+		2,
+		"delete-product-with-purchase-key",
+	)
+
+	request, err := http.NewRequest(
+		http.MethodDelete,
+		fmt.Sprintf(
+			"%s/api/v1/products/%d",
+			ts.server.URL,
+			product.ID,
+		),
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("create delete request: %v", err)
+	}
+
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatalf("delete product request: %v", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusConflict {
+		responseBody, _ := io.ReadAll(response.Body)
+
+		t.Fatalf(
+			"expected status %d, got %d: %s",
+			http.StatusConflict,
+			response.StatusCode,
+			string(responseBody),
+		)
+	}
+
+	var result errorResponse
+
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+
+	if result.Error != "product has purchases" {
+		t.Fatalf(
+			"expected error %q, got %q",
+			"product has purchases",
+			result.Error,
+		)
+	}
+
+	getRequest, err := http.NewRequest(
+		http.MethodGet,
+		fmt.Sprintf(
+			"%s/api/v1/products/%d",
+			ts.server.URL,
+			product.ID,
+		),
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("create get product request: %v", err)
+	}
+
+	getResponse, err := http.DefaultClient.Do(getRequest)
+	if err != nil {
+		t.Fatalf("get product request: %v", err)
+	}
+	defer getResponse.Body.Close()
+
+	if getResponse.StatusCode != http.StatusOK {
+		t.Fatalf(
+			"expected status %d, got %d",
+			http.StatusOK,
+			getResponse.StatusCode,
+		)
+	}
+
+	var existingProduct productResponse
+
+	if err := json.NewDecoder(
+		getResponse.Body,
+	).Decode(&existingProduct); err != nil {
+		t.Fatalf("decode product response: %v", err)
+	}
+
+	if existingProduct.ID != product.ID {
+		t.Fatalf(
+			"expected product ID %d, got %d",
+			product.ID,
+			existingProduct.ID,
+		)
+	}
+}
+
 func TestIntegration_ProductDuplicateSKU(t *testing.T) {
 	ts := newTestServer(t)
 
@@ -1099,7 +1207,7 @@ func TestIntegration_PurchaseIdempotencyDifferentRequest(t *testing.T) {
 		bytes.NewReader(body),
 	)
 	if err != nil {
-		t.Fatalf("create purchase request: %v", err)
+		t.Fatalf("create request: %v", err)
 	}
 
 	request.Header.Set("Content-Type", "application/json")
@@ -1400,7 +1508,7 @@ func TestIntegration_MissingIdempotencyKey(t *testing.T) {
 		bytes.NewReader(body),
 	)
 	if err != nil {
-		t.Fatalf("create purchase request: %v", err)
+		t.Fatalf("create request: %v", err)
 	}
 
 	request.Header.Set("Content-Type", "application/json")

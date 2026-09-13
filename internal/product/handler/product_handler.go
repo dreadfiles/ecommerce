@@ -272,6 +272,13 @@ func (h *ProductHandler) Delete(
 				err.Error(),
 			)
 
+		case errors.Is(err, repository.ErrHasPurchases):
+			httptransport.WriteError(
+				w,
+				http.StatusConflict,
+				err.Error(),
+			)
+
 		default:
 			httptransport.WriteError(
 				w,

@@ -2,13 +2,30 @@ services:
   app:
     build:
       context: .
+      dockerfile: Dockerfile
+    working_dir: /workspace
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ecommerce
+      DB_PASSWORD: ecommerce
+      DB_NAME: ecommerce
+
+  app-dev:
+    profiles:
+      - dev
+    build:
+      context: .
       dockerfile: .devcontainer/Dockerfile
     working_dir: /workspace
     command: sleep infinity
     volumes:
       - .:/workspace
-    ports:
-      - "18080:8080"
     depends_on:
       db:
         condition: service_healthy

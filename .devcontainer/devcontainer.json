@@ -1,10 +1,13 @@
 {
   "name": "ecommerce-go-dev",
   "dockerComposeFile": "../docker-compose.yml",
-  "service": "app",
+  "service": "app-dev",
+  "runServices": [
+    "app-dev"
+  ],
   "workspaceFolder": "/workspace",
   "shutdownAction": "stopCompose",
-  "forwardPorts": [18080],
+  "forwardPorts": [8080],
   "customizations": {
     "vscode": {
       "extensions": [
